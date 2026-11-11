@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Musiktheorie üben</title>
+<style>
+:root{--bg:#f6f3ee;--card:#fff;--ink:#1d1d1f;--mut:#6b6b70;--acc:#3b5bdb;--ok:#2b9348;--bad:#d00000;--line:#d9d4ca;--key:#fff;--blk:#222;--hi:#ffb703;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#18181b;--card:#26262b;--ink:#f2f2f4;--mut:#a0a0a8;--acc:#7c93ff;--ok:#4cc26b;--bad:#ff6b6b;--line:#3b3b42;--key:#f1efe9;--blk:#0b0b0d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#18181b;--card:#26262b;--ink:#f2f2f4;--mut:#a0a0a8;--acc:#7c93ff;--ok:#4cc26b;--bad:#ff6b6b;--line:#3b3b42;--key:#f1efe9;--blk:#0b0b0d;color-scheme:dark}
+html,body{height:auto}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.4 -apple-system,system-ui,"Helvetica Neue",sans-serif;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+main{max-width:760px;margin:0 auto;padding:14px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+h1{font-size:22px;margin:4px 0}
+.chip{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 14px;font-weight:600;white-space:nowrap}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+button{font:inherit;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:12px;min-height:48px;min-width:48px;padding:6px 14px;cursor:pointer}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+button.go{background:var(--ok);border-color:var(--ok);color:#fff;font-weight:700;padding:6px 26px}
+.tabs button{flex:1;font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+.q{font-size:19px;margin:0 0 8px}
+.q b{color:var(--acc)}
+.fb{min-height:28px;font-weight:700;margin:10px 0 0}
+.fb.ok{color:var(--ok)}.fb.bad{color:var(--bad)}
+.ans{color:var(--mut);margin:6px 0}
+.pad button{font-size:22px;min-width:56px;font-weight:600}
+svg{touch-action:manipulation}
+#tbar{display:flex;align-items:center;gap:10px;margin:0 0 10px;font-weight:700;min-height:18px}
+.tb{height:10px;background:var(--line);border-radius:6px;flex:1;overflow:hidden}.tf{height:100%;background:var(--acc)}.tf.low{background:var(--bad)}
+</style></head>
+<body><main>
+<header><h1>🎼 Musiktheorie üben</h1><div style="display:flex;gap:8px;align-items:center"><span class="chip" id="score"></span><button onclick="resetScore()" aria-label="Zurücksetzen">↺</button></div></header>
+<div class="row tabs" id="tabs"></div>
+<div class="row" id="lvls"></div>
+<div class="row" id="opts"></div>
+<div id="tbar"></div>
+<div class="card" id="card"></div>
+</main>
+<script>
+const L=['C','D','E','F','G','A','H'],PC=[0,2,4,5,7,9,11];
+const nm=(l,a)=>a==0?L[l]:a>0?L[l]+'is':(l==2?'Es':l==5?'As':l==6?'B':L[l]+'es');
+const sym=a=>a>0?'♯':a<0?'♭':'';
+const pcOf=(l,a)=>(PC[l]+a+12)%12;
+const rnd=n=>Math.floor(Math.random()*n),pick=a=>a[rnd(a.length)];
+const $=id=>document.getElementById(id);
+const TABS=[['read','Noten lesen'],['draw','Noten einzeichnen'],['keys','Klaviatur'],['chord','Dreiklänge']];
+let tab='read',vor=false,sub='id',Q,S,done,fb,score={r:0,n:0},lvl=0,tLeft=0,tInt;
+const LV=[[0,'Üben (ohne Timer)'],[60,'Leicht · 60 s'],[30,'Mittel · 30 s'],[15,'Schwer · 15 s']];
+
+function chords(v){const r=[];
+ for(let l=0;l<7;l++)for(let a=-1;a<=1;a++)for(const q of ['Dur','Moll']){
+  const p=pcOf(l,a),iv=q=='Dur'?[0,4,7]:[0,3,7];
+  const ns=iv.map((d,i)=>{const l2=(l+2*i)%7;let x=((p+d)%12-PC[l2]+12)%12;if(x>6)x-=12;return{l:l2,a:x,i:l+2*i,pc:(p+d)%12}});
+  const okSp=ns.every(n=>Math.abs(n.a)<=1&&!(n.a>0&&(n.l==2||n.l==6))&&!(n.a<0&&(n.l==0||n.l==3)));
+  if(okSp&&(v||ns.every(n=>n.a==0)))r.push({l,a,q,ns});}
+ return r}
+
+function rightStr(){return tab=='keys'?kn(Q.k%12):tab=='chord'?nm(Q.l,Q.a)+'-'+Q.q:nm(Q.l,Q.a)}
+function drawBar(){$('tbar').innerHTML=lvl?`<div class="tb"><div class="tf ${tLeft<=5?'low':''}" style="width:${tLeft/lvl*100}%"></div></div><span>⏱ ${tLeft} s</span>`:''}
+function startTimer(){clearInterval(tInt);if(!lvl){drawBar();return}tLeft=lvl;drawBar();
+ tInt=setInterval(()=>{if(done){clearInterval(tInt);return}tLeft--;drawBar();if(tLeft<=0){clearInterval(tInt);timeout()}},1000)}
+function timeout(){if(done)return;score.n++;done=true;fb=['bad','Zeit abgelaufen! Richtig: '+rightStr()];render()}
+function setLvl(s){lvl=s;if(s)vor=s<60;newQ();render()}
+function newQ(){
+ done=false;fb='';S={l:null,a:0,q:null,p:null,keys:new Set(),cn:new Map()};
+ if(tab=='read'||tab=='draw'){
+  const i=rnd(13),l=i%7;let a=0;
+  if(vor&&Math.random()<.7){const o=[];if([0,1,3,4,5].includes(l))o.push(1);if([1,2,4,5,6].includes(l))o.push(-1);a=pick(o)}
+  Q={i,l,a};
+ }else if(tab=='keys'){
+  const w=[0,2,4,5,7,9,11];let k=rnd(24);if(!vor)k=pick(w)+12*rnd(2);Q={k};
+ }else Q=pick(chords(vor));startTimer();
+}
+
+function staff(ns,click){
+ let s=`<svg viewBox="0 0 360 200" style="width:100%;max-width:520px;height:auto;display:block;margin:auto" ${click?'onpointerdown="sd(event)"':''}><rect width="360" height="200" fill="transparent"/><g stroke="currentColor" stroke-width="1.5">`;
+ for(let k=0;k<5;k++)s+=`<line x1="20" x2="340" y1="${150-14*k}" y2="${150-14*k}"/>`;
+ s+=`</g><text x="24" y="158" font-size="80" fill="currentColor" font-family="'Apple Symbols','Noto Music','Segoe UI Symbol',serif">𝄞</text>`;
+ ns.forEach(n=>{const x=n.x||200,y=150-(n.i-2)*7,c=n.c||'currentColor';
+  if(n.i==0||n.i==12)s+=`<line x1="${x-16}" x2="${x+16}" y1="${y}" y2="${y}" stroke="${c}" stroke-width="1.5"/>`;
+  s+=`<ellipse cx="${x}" cy="${y}" rx="9" ry="6" fill="none" stroke="${c}" stroke-width="2.4" transform="rotate(-20 ${x} ${y})"/>`;
+  if(n.a)s+=`<text x="${x-34}" y="${y+9}" font-size="28" fill="${c}">${sym(n.a)}</text>`});
+ return s+'</svg>'}
+
+function sd(e){if(done)return;const r=e.currentTarget.getBoundingClientRect();const y=(e.clientY-r.top)*200/r.height;const p=Math.max(0,Math.min(12,Math.round((150-y)/7)+2));if(tab=='chord'){if(S.cn.has(p))S.cn.delete(p);else if(S.cn.size<3)S.cn.set(p,vor?S.a:0)}else S.p=p;render()}
+
+function keyboard(o){
+ const f=(k,b)=>o.ok&&o.ok.has(k)?'var(--ok)':S.keys.has(k)?'var(--acc)':o.hi===k?'var(--hi)':b;
+ let s=`<svg viewBox="0 0 560 160" style="width:100%;max-width:640px;display:block;margin:12px auto 0">`,bl='';
+ for(let i=0;i<14;i++){const k=12*Math.floor(i/7)+PC[i%7];
+  s+=`<rect x="${i*40+1}" y="2" width="38" height="150" rx="4" fill="${f(k,'var(--key)')}" stroke="var(--blk)" stroke-width="1.5" onpointerdown="kd(${k})"/>`;
+  if(i<13&&[0,1,3,4,5].includes(i%7))bl+=`<rect x="${(i+1)*40-12}" y="2" width="24" height="92" rx="3" fill="${f(k+1,'var(--blk)')}" stroke="var(--blk)" stroke-width="1.5" onpointerdown="kd(${k+1})"/>`}
+ return s+bl+'</svg>'}
+
+function kd(k){if(tab=='chord'&&sub=='in'&&!done){S.keys.has(k)?S.keys.delete(k):S.keys.add(k);render()}}
+function pickL(l){if(!done){S.l=l;render()}}
+function pickA(a){if(!done){S.a=a;render()}}
+function pickQ(q){if(!done){S.q=q;render()}}
+
+function pad(withQ){
+ let h='<div class="row pad">'+L.map((x,i)=>`<button class="${S.l===i?'on':''}" onclick="pickL(${i})">${x}</button>`).join('')+'</div>';
+ if(vor||tab=='draw'&&vor)h+='<div class="row pad">'+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button class="${S.a===a?'on':''}" onclick="pickA(${a})">${t}</button>`).join('')+'</div>';
+ if(withQ)h+='<div class="row pad">'+['Dur','Moll'].map(q=>`<button class="${S.q===q?'on':''}" onclick="pickQ('${q}')">${q}</button>`).join('')+'</div>';
+ const a=S.l===null?'–':nm(S.l,vor?S.a:0)+(withQ&&S.q?'-'+S.q:'');
+ return h+`<p class="ans">Deine Antwort: <b>${a}</b></p>`}
+
+function check(){
+ if(done)return;let ok=false,right='';
+ if(tab=='read'){if(S.l===null)return;ok=S.l==Q.l&&S.a==Q.a;right=nm(Q.l,Q.a)}
+ else if(tab=='draw'){if(S.p===null)return;ok=S.p%7==Q.l&&S.a==Q.a;right=nm(Q.l,Q.a)}
+ else if(tab=='keys'){if(S.l===null)return;ok=pcOf(S.l,S.a)==Q.k%12;right=[0,1,2,3,4,5,6,7,8,9,10,11].includes(Q.k%12)?kn(Q.k%12):''}
+ else if(sub=='dr'){if(S.cn.size<3)return;const p=[...S.cn.keys()].sort((x,y)=>x-y);ok=p[1]-p[0]==2&&p[2]-p[1]==2&&p.every((x,k)=>x%7==Q.ns[k].l&&S.cn.get(x)==Q.ns[k].a);right=nm(Q.l,Q.a)+'-'+Q.q}
+ else if(sub=='id'){if(S.l===null||!S.q)return;ok=S.l==Q.l&&S.a==Q.a&&S.q==Q.q;right=nm(Q.l,Q.a)+'-'+Q.q}
+ else{const t=new Set(Q.ns.map(n=>n.pc)),s=new Set([...S.keys].map(k=>k%12));if(!s.size)return;ok=t.size==s.size&&[...t].every(x=>s.has(x));right=nm(Q.l,Q.a)+'-'+Q.q}
+ score.n++;if(ok)score.r++;done=true;clearInterval(tInt);
+ fb=ok?['ok','Richtig! 🎉']:['bad','Leider falsch. Richtig: '+right];render()}
+function kn(p){return ['C','Cis / Des','D','Dis / Es','E','F','Fis / Ges','G','Gis / As','A','Ais / B','H'][p]}
+function resetScore(){score={r:0,n:0};newQ();render()}
+function setTab(t){tab=t;newQ();render()}
+function setVor(v){vor=v;newQ();render()}
+function setSub(s){sub=s;newQ();render()}
+function next(){newQ();render()}
+
+function render(){
+ $('tabs').innerHTML=TABS.map(([k,t])=>`<button class="${tab==k?'on':''}" onclick="setTab('${k}')">${t}</button>`).join('');
+ $('opts').innerHTML=[[false,'Ohne Vorzeichen'],[true,'Mit Vorzeichen']].map(([v,t])=>`<button class="${vor==v?'on':''}" onclick="setVor(${v})">${t}</button>`).join('')+(tab=='chord'?'<span style="width:12px"></span>'+[['id','Bestimmen'],['dr','Einzeichnen'],['in','Auf Klaviatur']].map(([k,t])=>`<button class="${sub==k?'on':''}" onclick="setSub('${k}')">${t}</button>`).join(''):'');
+ $('score').textContent='✓ '+score.r+' / '+score.n;
+ $('lvls').innerHTML=LV.map(([s,t])=>`<button class="${lvl==s?'on':''}" onclick="setLvl(${s})">${t}</button>`).join('');
+ let h='';
+ if(tab=='read')h=`<p class="q">Welcher Ton ist das? (Violinschlüssel)</p>${staff([{i:Q.i,a:Q.a}])}${pad(false)}`;
+ else if(tab=='draw'){
+  const ns=[];if(S.p!==null)ns.push({i:S.p,a:vor?S.a:0,c:done?(fb[0]=='ok'?'var(--ok)':'var(--bad)'):'var(--acc)'});
+  if(done&&fb[0]=='bad')ns.push({i:Q.i,a:Q.a,c:'var(--ok)',x:270});
+  h=`<p class="q">Zeichne den Ton <b>${nm(Q.l,Q.a)}</b> ein. Tippe auf die passende Stelle im Notensystem${vor?' und wähle das Vorzeichen':''}.</p>${staff(ns,true)}`;
+  if(vor)h+='<div class="row pad">'+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button class="${S.a===a?'on':''}" onclick="pickA(${a})">${t}</button>`).join('')+'</div>';
+  h+='<p class="ans">Die Oktavlage ist egal.</p>';
+ }else if(tab=='keys')h=`<p class="q">Wie heißt die orange Taste?</p>${keyboard({hi:Q.k,ok:done&&fb[0]=='bad'?new Set([Q.k]):null})}${pad(false)}`;
+ else if(sub=='dr'){const ns=[...S.cn].map(([i,a])=>({i,a,c:done?(fb[0]=='ok'?'var(--ok)':'var(--bad)'):'var(--acc)'}));if(done&&fb[0]=='bad')Q.ns.forEach(n=>ns.push({i:n.i,a:n.a,c:'var(--ok)',x:270}));
+  h=`<p class="q">Zeichne den Dreiklang <b>${nm(Q.l,Q.a)}-${Q.q}</b> in Terzschichtung ein. Tippe nacheinander drei Stellen an${vor?' und wähle vor jedem Ton das Vorzeichen':''}. Tippe eine Note erneut an, um sie zu löschen.</p>${staff(ns,true)}`;
+  if(vor)h+='<div class="row pad">'+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button class="${S.a===a?'on':''}" onclick="pickA(${a})">${t}</button>`).join('')+'</div>'}
+ else if(sub=='id')h=`<p class="q">Welcher Dreiklang ist das?</p>${staff(Q.ns.map(n=>({i:n.i,a:n.a})))}${pad(true)}`;
+ else{const t=new Set(Q.ns.map(n=>n.pc));
+  const okS=done&&fb[0]=='bad'?new Set([...Array(24).keys()].filter(k=>t.has(k%12))):null;
+  h=`<p class="q">Tippe die Töne des Dreiklangs <b>${nm(Q.l,Q.a)}-${Q.q}</b> auf der Klaviatur an.</p>${keyboard({ok:okS})}`}
+ h+=`<p class="fb ${fb?fb[0]:''}">${fb?fb[1]:''}</p><div class="row">${done?'<button class="go" onclick="next()">Weiter ›</button>':'<button class="go" onclick="check()">Prüfen</button>'}</div>`;
+ $('card').innerHTML=h}
+newQ();render();
+</script></body></html>
